@@ -48,6 +48,44 @@ jobs:
               ignore=shutil.ignore_patterns(".git", ".github", OUT_DIR),
           )
 
+          MOBILE_FIX_STYLE = textwrap.dedent("""\
+          <style id="dialogue-mobile-fix">
+            @media (max-width: 600px){
+              .chat{
+                padding:14px 10px 48px;
+                gap:12px;
+              }
+              .row{
+                flex-direction:column;
+                gap:4px;
+              }
+              .row.user{align-items:flex-end;}
+              .row.bot{align-items:flex-start;}
+              .avatar{display:none;}
+              .name{
+                margin:0 0 4px 2px;
+                font-weight:700;
+              }
+              .name::before{content:"🤖 ";}
+              .stack{min-width:0;}
+              .row.user .stack{max-width:90%;}
+              .row.bot .stack{max-width:96%;}
+              .bubble{
+                padding:10px 12px;
+                font-size:14px;
+                overflow-wrap:anywhere;
+              }
+              .bubble ul,.bubble ol{padding-left:18px;}
+              .bubble table{display:block;overflow-x:auto;}
+              .time{
+                margin:0 4px;
+                align-self:auto;
+              }
+              .user .time{order:1;}
+            }
+          </style>
+          """)
+
           kst = datetime.timezone(datetime.timedelta(hours=9))
           entries = []
 
@@ -65,6 +103,26 @@ jobs:
 
               with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                   content = f.read()
+
+              if (
+                  ".chat" in content
+                  and ".bubble" in content
+                  and "@media (max-width: 600px)" not in content
+                  and "dialogue-mobile-fix" not in content
+              ):
+                  if re.search(r"</head>", content, re.IGNORECASE):
+                      patched = re.sub(
+                          r"</head>",
+                          lambda _m: MOBILE_FIX_STYLE + "</head>",
+                          content,
+                          count=1,
+                          flags=re.IGNORECASE,
+                      )
+                  else:
+                      patched = content + "\n" + MOBILE_FIX_STYLE
+                  out_file_path = os.path.join(OUT_DIR, rel_dir, "index.html")
+                  with open(out_file_path, "w", encoding="utf-8") as out_f:
+                      out_f.write(patched)
 
               m = re.search(r"<title[^>]*>(.*?)</title>", content, re.IGNORECASE | re.DOTALL)
               title = html.unescape(m.group(1)).strip() if m else rel_dir
@@ -100,15 +158,11 @@ jobs:
           for item in entries:
               href = "/".join(urllib.parse.quote(p) for p in item["dir"].split("/")) + "/"
               title_esc = html.escape(item["title"])
-              dir_esc = html.escape(item["dir"])
               date_esc = html.escape(item["date"]) if item["date"] else "날짜 없음"
               cards_html.append(
-                  f'      <a class="card" href="{href}" data-search="{dir_esc.lower()} {title_esc.lower()}">\n'
-                  f'        <div class="card-top">\n'
-                  f'          <span class="slug">/{dir_esc}</span>\n'
-                  f'          <span class="date">{date_esc}</span>\n'
-                  f'        </div>\n'
+                  f'      <a class="card" href="{href}" data-search="{title_esc.lower()}">\n'
                   f'        <div class="title">{title_esc}</div>\n'
+                  f'        <div class="date">{date_esc}</div>\n'
                   f'      </a>'
               )
 
@@ -215,25 +269,10 @@ jobs:
               transform:translateY(-1px);
               box-shadow:0 4px 10px rgba(0,0,0,.1);
             }
-            .card-top{
-              display:flex;
-              justify-content:space-between;
-              align-items:center;
-              gap:8px;
-              margin-bottom:4px;
-            }
-            .slug{
-              font-family:Consolas,"Courier New",monospace;
-              font-size:12px;
-              color:#0a4d8c;
-              background:#eef4fa;
-              padding:1px 7px;
-              border-radius:6px;
-            }
             .date{
-              font-size:11.5px;
+              font-size:12px;
               color:var(--meta);
-              white-space:nowrap;
+              margin-top:4px;
             }
             .title{
               font-size:15px;
@@ -263,7 +302,7 @@ jobs:
               <span class="count">총 __COUNT__개</span>
             </header>
             <div class="main">
-              <input id="q" class="search" type="search" placeholder="제목 또는 폴더명으로 검색..." autocomplete="off">
+              <input id="q" class="search" type="search" placeholder="제목으로 검색..." autocomplete="off">
               <div id="list" class="list">
           __LIST__
               </div>
